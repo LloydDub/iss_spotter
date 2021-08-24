@@ -1,4 +1,5 @@
 // iss.js
+
 const request = require('request');
 
 /**
@@ -10,22 +11,73 @@ const request = require('request');
  *   - The IP address as a string (null if error). Example: "162.245.144.188"
  */
 const fetchMyIP = function(callback) {
-  request('https://api.ipify.org?format=json', (error, response, body) => {  // uses request to http the target api
-    if (error) { // does the error check
-      callback(error, null); // the callback for iss.js handlingt he error
-      return;
-    }
-    // if non-200 status, assume server error
+  request('https://api.ipify.org?format=json', (error, response, body) => {
+    if (error) return callback(error, null);
+
     if (response.statusCode !== 200) {
-      const msg = `Status Code ${response.statusCode} when fetching IP. Response: ${body}`;
-      callback(Error(msg), null); // idk how Error() works but looks like it majes a fancy error!
+      callback(Error(`Status Code ${response.statusCode} when fetching IP: ${body}`), null);
       return;
     }
-    const ip = JSON.parse(body).ip; //make an ip variable to pass over in index.js
+
+    const ip = JSON.parse(body).ip;
     callback(null, ip);
-  })
-}
+  });
+};
 
+/**
+ * Makes a single API request to retrieve the lat/lng for a given IPv4 address.
+ * Input:
+ *   - The ip (ipv4) address (string)
+ *   - A callback (to pass back an error or the lat/lng object)
+ * Returns (via Callback):
+ *   - An error, if any (nullable)
+ *   - The lat and lng as an object (null if error). Example:
+ *     { latitude: '49.27670', longitude: '-123.13000' }
+ */
+const fetchCoordsByIP = function(ip, callback) {
+  request(`https://freegeoip.app/json/${ip}`, (error, response, body) => {
+    if (error) {
+      callback(error, null);
+      return;
+    }
 
+    if (response.statusCode !== 200) {
+      callback(Error(`Status Code ${response.statusCode} when fetching Coordinates for IP: ${body}`), null);
+      return;
+    }
 
-module.exports = { fetchMyIP };
+    const { latitude, longitude } = JSON.parse(body);
+    // console.log('lat/lng data:', { latitude, longitude });
+
+    callback(null, { latitude, longitude });
+  });
+};
+
+/**
+ * Makes a single API request to retrieve upcoming ISS fly over times the for the given lat/lng coordinates.
+ * Input:
+ *   - An object with keys `latitude` and `longitude`
+ *   - A callback (to pass back an error or the array of resulting data)
+ * Returns (via Callback):
+ *   - An error, if any (nullable)
+ *   - The fly over times as an array of objects (null if error). Example:
+ *     [ { risetime: 134564234, duration: 600 }, ... ]
+ */
+const fetchISSFlyOverTimes = function(coords, callback) {
+  const url = `https://web.archive.org/web/20200801235636/http://api.open-notify.org/iss-pass.json?lat=${coords.latitude}&lon=${coords.longitude}`;
+
+  request(url, (error, response, body) => {
+    if (error) {
+      callback(error, null);
+      return;
+    }
+
+    if (response.statusCode !== 200) {
+      callback(Error(`Status Code ${response.statusCode} when fetching ISS pass times: ${body}`), null);
+      return;
+    }
+
+    const passes = JSON.parse(body).response;
+    callback(null, passes);
+  });
+};
